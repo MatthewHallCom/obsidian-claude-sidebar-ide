@@ -7505,19 +7505,19 @@ var ClaudeSidebarSettingsTab = class extends import_obsidian.PluginSettingTab {
       });
     new import_obsidian.Setting(containerEl)
       .setName("Default working directory")
-      .setDesc("Path where the CLI opens by default. Absolute path, or relative to vault root (e.g. '..' opens one level up). Leave empty to use the vault root.")
+      .setDesc("Absolute path or relative to vault root. Leave empty for vault root.")
       .addText(text => text
-        .setPlaceholder("e.g. /Users/you/project  or  ..")
+        .setPlaceholder("/Users/you/project")
         .setValue(this.plugin.pluginData.defaultWorkingDir || "")
         .onChange(async (value) => {
           this.plugin.pluginData.defaultWorkingDir = value.trim() || null;
           await this.plugin.saveData(this.plugin.pluginData);
         }));
     new import_obsidian.Setting(containerEl)
-      .setName("Additional CLI flags")
-      .setDesc("Extra flags appended to the CLI command. Applied to every session.")
+      .setName("CLI flags")
+      .setDesc("Flags appended to every CLI session.")
       .addText(text => text
-        .setPlaceholder("e.g. --model claude-opus-4-6")
+        .setPlaceholder("--model claude-opus-4-6")
         .setValue(this.plugin.pluginData.additionalFlags || "")
         .onChange(async (value) => {
           this.plugin.pluginData.additionalFlags = value.trim() || null;
