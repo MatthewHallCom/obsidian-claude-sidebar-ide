@@ -5,6 +5,7 @@
 }
 
 .vault-terminal {
+	position: relative;
 	height: 100%;
 	min-height: 0;
 	display: flex;
@@ -40,6 +41,40 @@
 	background-color: var(--background-secondary) !important;
 	overscroll-behavior: contain;
 	scrollbar-gutter: stable;
+}
+
+/* Loading indicator shown while CLI starts — overlays the terminal */
+.vault-terminal-loading {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	background-color: var(--background-secondary);
+	transition: opacity 0.3s ease;
+}
+
+.vault-terminal-loading-fade {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.vault-terminal-spinner {
+	width: 24px;
+	height: 24px;
+	border: 2px solid var(--background-modifier-border);
+	border-top-color: var(--text-accent);
+	border-radius: 50%;
+	animation: vault-terminal-spin 0.8s linear infinite;
+}
+
+@keyframes vault-terminal-spin {
+	to { transform: rotate(360deg); }
 }
 
 /* IME support: keep textarea positioned near cursor for input method candidate window */

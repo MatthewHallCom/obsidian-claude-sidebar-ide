@@ -3,3 +3,5 @@ node_modules/
 *.log
 .claude/
 CLAUDE.md
+.omc
+main.js

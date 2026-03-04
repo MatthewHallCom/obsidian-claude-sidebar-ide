@@ -1,138 +1,140 @@
-# Claude Sidebar
+# Claude Sidebar IDE
 
-Run Claude Code in your Obsidian sidebar.
+Run Claude Code (and other AI coding CLIs) directly in your Obsidian sidebar — with full IDE integration so Claude automatically knows what you're working on.
 
-Built by [Derek Larson](https://dtlarson.com). [Pair with commands →](https://delegatewithclaude.com/commands)
+**Forked from [obsidian-claude-sidebar](https://github.com/derek-larson14/obsidian-claude-sidebar) by Derek Larson.**
 
-![Claude Sidebar](screenshot-obsidian.png)
+## What's Different From the Original
 
-## Features
+The original plugin embeds a terminal in your Obsidian sidebar and lets you run Claude Code. This fork adds **IDE integration** — the same protocol that VS Code, Neovim, and JetBrains use to give Claude automatic awareness of your editor state.
 
-- **Embedded terminal** - Full terminal in your Obsidian sidebar
-- **Auto-launches Claude** - Claude Code starts automatically
-- **Multiple tabs** - Run multiple Claude instances side by side
-- **Folder context menu** - Right-click any folder to open Claude in that directory
-- **YOLO mode** - Launch Claude with `--dangerously-skip-permissions` via right-click menus
-- **Multi-backend** - Switch between Claude Code, Codex, OpenCode, and Gemini CLI in settings
+### IDE Integration
 
-## Requirements
+Claude Code supports an IDE integration protocol where editors run a local WebSocket server and expose tools for querying editor state. This fork implements that full protocol for Obsidian:
 
-- macOS, Linux, or Windows
-- Python 3
-- [Claude Code](https://claude.com/claude-code)
+- **Automatic context** — Claude knows which file you have open and what text is selected, no copy/pasting paths or manual "Send to Claude" commands needed
+- **WebSocket MCP server** — runs on localhost, writes a lock file to `~/.claude/ide/`, and sets environment variables so Claude discovers Obsidian automatically
+- **Full tool support** — implements `getCurrentSelection`, `getOpenEditors`, `getWorkspaceFolders`, `openFile`, `openDiff` (with a modal UI for accepting/rejecting changes), and more
+- **Selection tracking** — pushes `selection_changed` notifications to Claude as you navigate, debounced at 150ms
+- **Diff review modal** — when Claude wants to edit a file, you get a side-by-side diff modal to accept or reject the changes
+
+### Multi-Backend Support
+
+Run any of these AI coding CLIs from the same sidebar:
+
+- **Claude Code** (with full IDE integration)
+- **Codex CLI**
+- **Gemini CLI**
+- **OpenCode**
+- **Aider**
+
+Switch backends in settings. IDE integration is active when using Claude Code; other backends run as standard terminal sessions.
+
+### TypeScript Rewrite
+
+The original was a single monolithic `main.js`. This fork restructures into typed, modular TypeScript:
+
+```
+src/
+  main.ts          — plugin lifecycle, commands, ribbon menu
+  terminal-view.ts — xterm.js terminal rendering and PTY management
+  ide-server.ts    — WebSocket MCP server for IDE integration
+  ide-tools.ts     — tool handlers (getCurrentSelection, openDiff, etc.)
+  ws-framing.ts    — raw WebSocket frame parser (no dependencies)
+  diff-modal.ts    — side-by-side diff review UI
+  backends.ts      — CLI backend definitions
+  settings.ts      — settings tab UI
+  types.ts         — shared type definitions
+```
+
+Built with esbuild. PTY helper scripts are base64-embedded at compile time.
+
+### CI/CD
+
+Automated releases via GitHub Actions. Push a version tag (`v1.0.0`) and the workflow builds, typechecks, and publishes a GitHub Release with the three files Obsidian needs: `main.js`, `manifest.json`, `styles.css`.
+
+### Other Improvements
+
+- Right-click "Send selection to Claude" context menu
+- "Run Claude from this folder" command
+- Resume last conversation support
+- Chinese IME and CJK input support
+- Multi-tab terminal support
+- YOLO mode (skip permissions) toggle
+- Linux PTY permission fix
+- Scroll behavior fixes
 
 ## Installation
 
-### Quick Install (Mac/Linux)
-
-In your vault folder, run:
-```bash
-curl -sL https://github.com/derek-larson14/obsidian-claude-sidebar/archive/refs/heads/main.tar.gz | tar -xz -C .obsidian/plugins && mv .obsidian/plugins/obsidian-claude-sidebar-main .obsidian/plugins/claude-sidebar
-```
-
-Then in Obsidian: Settings → Community Plugins → Refresh → Enable "Claude Sidebar"
-
-**Windows:** See [Windows Setup](#windows-setup-experimental) below.
-
-### Manual Installation
-
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/derek-larson14/obsidian-claude-sidebar/releases)
-2. Create folder: `<your-vault>/.obsidian/plugins/claude-sidebar/`
-3. Copy the downloaded files into that folder
-4. Reload Obsidian and enable the plugin in Settings → Community Plugins
-
-### BRAT (Auto-Updates)
+### Via BRAT (Recommended)
 
 1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) from Community Plugins
 2. In BRAT settings, click "Add Beta plugin"
-3. Enter: `derek-larson14/obsidian-claude-sidebar`
-4. Enable "Claude Sidebar" in Settings → Community Plugins
-
-BRAT handles updates automatically when new releases are published.
-
-### From Community Plugins
-
-Once approved, you'll be able to search for "Claude Sidebar" in Community Plugins → Browse.
-
-## Updating
-
-Paste into a Claude Code session from your vault:
-
-> Update the Claude Sidebar plugin. Download main.js, manifest.json, and styles.css from https://github.com/derek-larson14/obsidian-claude-sidebar/releases/latest/download/ into .obsidian/plugins/claude-sidebar/. Tell me the old and new version numbers.
+3. Enter: `MatthewHallCom/obsidian-claude-sidebar-ide`
+4. Enable "Claude Sidebar IDE" in Settings > Community Plugins
 
 ### Manual
 
-In your vault folder, run:
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/MatthewHallCom/obsidian-claude-sidebar-ide/releases/latest)
+2. Create `.obsidian/plugins/claude-sidebar-ide/` in your vault
+3. Place the three files there
+4. Enable "Claude Sidebar IDE" in Settings > Community Plugins
+
+## Requirements
+
+- Desktop only (macOS, Linux, Windows)
+- Python 3
+- At least one AI CLI installed ([Claude Code](https://claude.com/claude-code), Codex, Gemini CLI, OpenCode, or Aider)
+
+### Windows
+
+Windows requires [pywinpty](https://github.com/andfoy/pywinpty):
+
 ```bash
-cd .obsidian/plugins/claude-sidebar
-curl -LO https://github.com/derek-larson14/obsidian-claude-sidebar/releases/latest/download/main.js
-curl -LO https://github.com/derek-larson14/obsidian-claude-sidebar/releases/latest/download/manifest.json
-curl -LO https://github.com/derek-larson14/obsidian-claude-sidebar/releases/latest/download/styles.css
+pip install pywinpty
 ```
 
-Then restart Obsidian or disable/re-enable the plugin.
+Performance may be slower than macOS/Linux due to ConPTY overhead.
 
 ## Usage
-
-https://github.com/user-attachments/assets/de98439a-8a1f-4a8a-9d02-44027d756462
 
 - Click the bot icon in the left ribbon to open Claude
 - Right-click the bot icon for YOLO mode, folder targeting, or resuming a conversation
 - Right-click any folder for "Open Claude here" or "Open Claude here (YOLO)"
 - Use Command Palette (`Cmd+P`) for all commands:
   - **Open Claude Code** / **New Claude Tab** / **Close Claude Tab**
-  - **Toggle Focus: Editor ↔ Claude** - Quick switch between editor and Claude
-  - **Run Claude from this folder** - Start Claude in the active file's directory
-  - **Resume last conversation** - Pick up where you left off (`--continue`)
+  - **Toggle Focus: Editor ↔ Claude**
+  - **Run Claude from this folder**
+  - **Resume last conversation** (`--continue`)
   - **Send File Path to Claude** / **Send Selection to Claude**
 - Press `Shift+Enter` for multi-line input
-- Set your own hotkeys in Settings → Hotkeys
-
-## Platform Support
-
-| Platform | Status |
-|----------|--------|
-| macOS | ✅ Supported |
-| Linux | ✅ Supported |
-| Windows | ⚠️ Experimental |
-
-Want to use it on iOS or Android? See [Claude Anywhere](https://github.com/derek-larson14/claude-anywhere).
-
-### Windows Setup (Experimental)
-
-Windows requires additional dependencies:
-
-1. Install Python 3 from [python.org](https://python.org)
-2. Install pywinpty:
-```bash
-pip install pywinpty
-```
-
-3. Install the plugin (run from your vault folder in PowerShell):
-```powershell
-$u="https://github.com/derek-larson14/obsidian-claude-sidebar/archive/main.zip"; Invoke-WebRequest $u -OutFile s.zip; Expand-Archive s.zip .obsidian\plugins -Force; Move-Item ".obsidian\plugins\obsidian-claude-sidebar-main" ".obsidian\plugins\claude-sidebar" -Force; Remove-Item s.zip
-```
-
-**Note:** Windows support is experimental. Performance may be slower than macOS/Linux due to ConPTY overhead.
 
 ## How It Works
 
-- [xterm.js](https://xtermjs.org/) for terminal emulation
-- Python's built-in `pty` module for pseudo-terminal support (macOS/Linux)
-- [pywinpty](https://github.com/andfoy/pywinpty) for Windows PTY support
+The plugin creates an [xterm.js](https://xtermjs.org/) terminal in your Obsidian sidebar and spawns the AI CLI as a child process via a Python PTY bridge (`pty` on Unix, `pywinpty` on Windows).
+
+When using Claude Code, the plugin also starts a **WebSocket MCP server** on localhost that implements the [Claude Code IDE integration protocol](https://github.com/anthropics/claude-code). This is the same protocol used by the official VS Code extension and community integrations like [claudecode.nvim](https://github.com/cloudcodedev/claudecode.nvim). The server:
+
+1. Binds to a random port on `127.0.0.1`
+2. Writes a lock file to `~/.claude/ide/[port].lock` with connection metadata
+3. Sets `CLAUDE_CODE_SSE_PORT` and `ENABLE_IDE_INTEGRATION=true` in the shell environment
+4. Claude Code CLI discovers the server via the lock file, connects over WebSocket, and authenticates
+5. The plugin pushes `selection_changed` notifications as you navigate files
+6. Claude calls tools like `getCurrentSelection`, `getOpenEditors`, `openFile`, and `openDiff` to interact with Obsidian
+
+This gives Claude the same ambient awareness of your editor state that it has in VS Code — which file is open, what's selected, what other files are in your workspace — without any manual context passing.
 
 ## Development
 
-The PTY scripts (`terminal_pty.py` for Unix, `terminal_win.py` for Windows) are embedded as base64 in `main.js` for Obsidian plugin directory compatibility. To rebuild after modifying:
-
 ```bash
-./build.sh
+bun install
+bun run dev       # watch mode
+bun run build     # production build
+bun run check     # typecheck + build
 ```
-
-## Contributing
-
-Issues and PRs welcome at [github.com/derek-larson14/obsidian-claude-sidebar](https://github.com/derek-larson14/obsidian-claude-sidebar)
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
+
+Original work copyright (c) 2025 [Derek Larson](https://github.com/derek-larson14). Fork copyright (c) 2026 [Matthew Hall](https://github.com/MatthewHallCom).
