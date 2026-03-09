@@ -5,7 +5,9 @@ export interface PluginData {
   lastCwd?: string | null;
   runtimeMode?: 'local' | 'sprites';
   spritesApiToken?: string | null;
-
+  deepgramApiKey?: string | null;
+  ttsVoice?: string | null;
+  vadSensitivity?: number | null;
 }
 
 export interface Backend {

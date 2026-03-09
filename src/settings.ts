@@ -123,5 +123,55 @@ export class ClaudeSidebarSettingsTab extends PluginSettingTab {
           await this.plugin.saveData(this.plugin.pluginData);
         }));
 
+    // --- Voice Mode ---
+    containerEl.createEl('h3', { text: 'Voice Mode' });
+
+    const dgSetting = new Setting(containerEl)
+      .setName("Deepgram API key")
+      .setDesc("Required for voice mode (STT + TTS). ");
+    dgSetting.descEl.createEl('a', {
+      text: 'Get a key',
+      href: 'https://console.deepgram.com/',
+    });
+    dgSetting.addText(text => {
+      text.inputEl.type = 'password';
+      text
+        .setPlaceholder('dg_...')
+        .setValue(this.plugin.pluginData.deepgramApiKey || '')
+        .onChange(async (value) => {
+          this.plugin.pluginData.deepgramApiKey = value.replace(/\s/g, '') || null;
+          await this.plugin.saveData(this.plugin.pluginData);
+        });
+    });
+
+    new Setting(containerEl)
+      .setName("TTS voice")
+      .setDesc("Deepgram Aura voice model.")
+      .addDropdown(drop => {
+        drop.addOption('aura-2-asteria-en', 'Asteria (female)');
+        drop.addOption('aura-2-orion-en', 'Orion (male)');
+        drop.addOption('aura-2-luna-en', 'Luna (female)');
+        drop.addOption('aura-2-arcas-en', 'Arcas (male)');
+        drop.setValue(this.plugin.pluginData.ttsVoice || 'aura-2-asteria-en');
+        drop.onChange(async (value) => {
+          this.plugin.pluginData.ttsVoice = value;
+          await this.plugin.saveData(this.plugin.pluginData);
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("VAD sensitivity")
+      .setDesc("End-of-speech detection delay (ms). Lower = faster but may cut off speech.")
+      .addSlider(slider => {
+        slider
+          .setLimits(200, 1000, 50)
+          .setValue(this.plugin.pluginData.vadSensitivity || 300)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.pluginData.vadSensitivity = value;
+            await this.plugin.saveData(this.plugin.pluginData);
+          });
+      });
+
   }
 }

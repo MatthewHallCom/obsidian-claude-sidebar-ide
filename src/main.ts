@@ -205,6 +205,19 @@ export default class VaultTerminalPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "toggle-voice-mode",
+      name: "Toggle Voice Mode",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(TerminalView);
+        if (view) {
+          if (!checking) view.toggleVoiceMode();
+          return true;
+        }
+        return false;
+      },
+    });
+
     // Register folder context menu (desktop only — requires filesystem adapter)
     if (Platform.isDesktopApp) {
       this.registerEvent(

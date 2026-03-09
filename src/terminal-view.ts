@@ -1,9 +1,12 @@
-import { ItemView, WorkspaceLeaf, Scope, Platform } from "obsidian";
+import { ItemView, WorkspaceLeaf, Scope, Platform, Notice } from "obsidian";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { IShellManager } from "./shell-interface";
 import { CLI_BACKENDS } from "./backends";
 import type VaultTerminalPlugin from "./main";
+import VoiceView from "./voice/voice-view";
+import VoiceController from "./voice/voice-controller";
+import { LocalClaudeBridge, SpritesClaudeBridge } from "./voice/claude-bridge";
 
 export const VIEW_TYPE = "vault-terminal";
 
@@ -27,6 +30,7 @@ export class TerminalView extends ItemView {
   private workingDir: string | null = null;
   private yoloMode = false;
   private continueSession = false;
+  private voiceView: VoiceView | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: VaultTerminalPlugin) {
     super(leaf);
@@ -345,6 +349,33 @@ export class TerminalView extends ItemView {
   private reconnectEl: HTMLElement | null = null;
   private outputBytes = 0;
 
+  toggleVoiceMode(): void {
+    if (this.voiceView) {
+      this.voiceView.hide();
+      this.voiceView = null;
+      return;
+    }
+    const apiKey = this.plugin.pluginData.deepgramApiKey;
+    if (!apiKey) {
+      new Notice("Set your Deepgram API key in settings to use voice mode.");
+      return;
+    }
+    let bridge;
+    if (this.plugin.pluginData.runtimeMode === 'sprites' && this.plugin.spriteManager) {
+      bridge = new SpritesClaudeBridge(this.plugin.spriteManager);
+    } else {
+      bridge = new LocalClaudeBridge();
+    }
+    const controller = new VoiceController({
+      apiKey,
+      ttsVoice: this.plugin.pluginData.ttsVoice ?? undefined,
+      vadSensitivity: this.plugin.pluginData.vadSensitivity ?? undefined,
+      bridge,
+    });
+    this.voiceView = new VoiceView(this.containerEl, controller);
+    this.voiceView.show();
+  }
+
   buildUI(): void {
     const container = this.containerEl;
     container.empty();
@@ -352,6 +383,10 @@ export class TerminalView extends ItemView {
     this.termHost = container.createDiv({ cls: "vault-terminal-host" });
     this.loadingEl = container.createDiv({ cls: "vault-terminal-loading" });
     this.loadingEl.innerHTML = `<div class="vault-terminal-spinner"></div><div>Starting Claude...</div>`;
+
+    const micBtn = container.createEl("button", { cls: "voice-mic-btn" });
+    micBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-1.5 4v6a1.5 1.5 0 0 0 3 0V5a1.5 1.5 0 0 0-3 0zM7 11a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.92V21h-2v-3.08A7 7 0 0 1 5 11h2z"/></svg>`;
+    micBtn.addEventListener("click", () => this.toggleVoiceMode());
   }
 
   hideLoading(): void {
@@ -869,6 +904,8 @@ export class TerminalView extends ItemView {
       this.termHost.removeEventListener("drop", this.fileDropHandler as EventListener);
       this.fileDropHandler = null;
     }
+    this.voiceView?.destroy();
+    this.voiceView = null;
     this.stopShell();
     this.term?.dispose();
     this.term = null;
