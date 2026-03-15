@@ -37,7 +37,7 @@
 }
 
 .vault-terminal-host .xterm-viewport {
-	overflow-y: auto !important;
+	overflow-y: scroll !important;
 	background-color: var(--background-secondary) !important;
 	overscroll-behavior: contain;
 	scrollbar-gutter: stable;

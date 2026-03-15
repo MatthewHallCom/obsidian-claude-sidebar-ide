@@ -27,6 +27,7 @@ export class TerminalView extends ItemView {
   private workingDir: string | null = null;
   private yoloMode = false;
   private continueSession = false;
+  private _shouldAutoScroll = true;
 
   constructor(leaf: WorkspaceLeaf, plugin: VaultTerminalPlugin) {
     super(leaf);
@@ -77,7 +78,10 @@ export class TerminalView extends ItemView {
     const state: Record<string, unknown> = {};
     if (this.workingDir) state.workingDir = this.workingDir;
     if (this.yoloMode) state.yoloMode = this.yoloMode;
-    // Don't persist continueSession — it's a one-time action
+    // Auto-resume: persist if shell was running and setting is enabled
+    if (this.shell.isRunning && this.plugin.pluginData.autoResume !== false) {
+      state.continueSession = true;
+    }
     return state;
   }
 
@@ -578,6 +582,23 @@ export class TerminalView extends ItemView {
     this.resizeObserver = new ResizeObserver(() => this.debouncedFit());
     this.resizeObserver.observe(this.termHost);
 
+    // Track user scroll intent — only explicit user gestures (wheel/touch)
+    // mark the terminal as "scrolled up". This avoids the fragile per-write
+    // baseY===viewportY check which can fail during rapid output.
+    const viewportEl = this.termHost?.querySelector('.xterm-viewport') as HTMLElement | null;
+    if (viewportEl) {
+      const updateScrollIntent = () => {
+        requestAnimationFrame(() => {
+          if (this.term) {
+            const buf = this.term.buffer.active;
+            this._shouldAutoScroll = buf.baseY <= buf.viewportY;
+          }
+        });
+      };
+      viewportEl.addEventListener('wheel', updateScrollIntent, { passive: true });
+      viewportEl.addEventListener('touchmove', updateScrollIntent, { passive: true });
+    }
+
     // Watch for theme changes
     this.themeObserver = new MutationObserver(() => this.updateTheme());
     this.themeObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
@@ -589,12 +610,10 @@ export class TerminalView extends ItemView {
   fit(): void {
     if (!this.term || !this.fitAddon) return;
     try {
-      // Check if terminal is at bottom before resize
-      const wasAtBottom = this.term.buffer.active.baseY === this.term.buffer.active.viewportY;
       this.fitAddon.fit();
-      // Only auto-scroll if we were already at bottom
-      if (wasAtBottom) {
-        this.term.scrollToBottom();
+      // Defer scroll correction to next frame so the reflow completes first
+      if (this._shouldAutoScroll) {
+        requestAnimationFrame(() => this.term?.scrollToBottom());
       }
     } catch (e) {}
   }
@@ -765,15 +784,22 @@ export class TerminalView extends ItemView {
             }
           }
           if (this.term) {
-            const buffer = this.term.buffer.active;
-            const atBottom = buffer.baseY === buffer.viewportY;
-            this.term.write(text);
-            if (atBottom) this.term.scrollToBottom();
+            this.term.write(text, () => {
+              if (this._shouldAutoScroll) {
+                requestAnimationFrame(() => this.term?.scrollToBottom());
+              }
+            });
           }
         },
         onStderr: (text: string) => {
           this.hideLoading();
-          this.term?.write(text);
+          if (this.term) {
+            this.term.write(text, () => {
+              if (this._shouldAutoScroll) {
+                requestAnimationFrame(() => this.term?.scrollToBottom());
+              }
+            });
+          }
         },
         onExit: (code: number | null, signal: string | null) => {
           this.hideLoading();

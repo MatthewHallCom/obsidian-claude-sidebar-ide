@@ -113,6 +113,16 @@ export class ClaudeSidebarSettingsTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
+      .setName("Auto-resume sessions")
+      .setDesc("Automatically resume the previous Claude session when Obsidian restarts.")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.pluginData.autoResume !== false)
+        .onChange(async (value) => {
+          this.plugin.pluginData.autoResume = value;
+          await this.plugin.saveData(this.plugin.pluginData);
+        }));
+
+    new Setting(containerEl)
       .setName("CLI flags")
       .setDesc("Flags appended to every CLI session.")
       .addText(text => text

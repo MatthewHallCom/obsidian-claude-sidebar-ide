@@ -19,6 +19,7 @@ export class IdeServer {
   private pendingDiffPromises = new Map<number, (result: string) => void>();
 
   public port: number | null = null;
+  public notifyCallback: ((type: string, notificationType: string | null, message: string | null) => void) | null = null;
 
   constructor(
     private app: App,
@@ -29,7 +30,34 @@ export class IdeServer {
     if (Platform?.isMobile) return;
     this.ideAuthToken = crypto.randomUUID();
     this.cleanStaleLockFiles();
-    const server = http.createServer((_req, res) => {
+    const server = http.createServer((req, res) => {
+      if (req.method === "POST" && req.url === "/notify") {
+        const authHeader = req.headers["x-claude-code-ide-authorization"];
+        if (authHeader !== this.ideAuthToken) {
+          res.writeHead(401);
+          res.end();
+          return;
+        }
+        let body = "";
+        req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+        req.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            const type = data.type || "notification";
+            const notificationType = data.notification_type || null;
+            const message = data.message || null;
+            if (this.notifyCallback) {
+              this.notifyCallback(type, notificationType, message);
+            }
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: true }));
+          } catch (_e) {
+            res.writeHead(400);
+            res.end();
+          }
+        });
+        return;
+      }
       res.writeHead(404);
       res.end();
     });

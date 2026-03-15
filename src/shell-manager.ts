@@ -13,11 +13,89 @@ export type { ShellOptions, ShellCallbacks };
 declare const __PTY_SCRIPT_B64__: string;
 declare const __WIN_PTY_SCRIPT_B64__: string;
 
+const NOTIFY_HOOK_SCRIPT = `#!/usr/bin/env node
+const fs = require("fs");
+const path = require("path");
+const http = require("http");
+
+let input = "";
+process.stdin.on("data", (c) => (input += c));
+process.stdin.on("end", () => {
+  try {
+    const data = JSON.parse(input);
+    const lockDir = path.join(require("os").homedir(), ".claude", "ide");
+    if (!fs.existsSync(lockDir)) { out(); return; }
+    const files = fs.readdirSync(lockDir).filter((f) => f.endsWith(".lock"));
+    for (const f of files) {
+      try {
+        const lock = JSON.parse(fs.readFileSync(path.join(lockDir, f), "utf8"));
+        if (lock.ideName !== "Obsidian") continue;
+        const port = parseInt(f.replace(".lock", ""), 10);
+        const body = JSON.stringify({
+          type: "notification",
+          notification_type: data.notification_type || null,
+          message: data.message || null,
+        });
+        const req = http.request({
+          hostname: "127.0.0.1", port, path: "/notify", method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-claude-code-ide-authorization": lock.authToken,
+            "Content-Length": Buffer.byteLength(body),
+          },
+        });
+        req.on("error", () => {});
+        req.end(body);
+      } catch (_e) {}
+    }
+  } catch (_e) {}
+  out();
+});
+function out() { process.stdout.write(JSON.stringify({ continue: true })); }
+`;
+
+const STOP_HOOK_SCRIPT = `#!/usr/bin/env node
+const fs = require("fs");
+const path = require("path");
+const http = require("http");
+
+let input = "";
+process.stdin.on("data", (c) => (input += c));
+process.stdin.on("end", () => {
+  try {
+    const lockDir = path.join(require("os").homedir(), ".claude", "ide");
+    if (!fs.existsSync(lockDir)) { out(); return; }
+    const files = fs.readdirSync(lockDir).filter((f) => f.endsWith(".lock"));
+    for (const f of files) {
+      try {
+        const lock = JSON.parse(fs.readFileSync(path.join(lockDir, f), "utf8"));
+        if (lock.ideName !== "Obsidian") continue;
+        const port = parseInt(f.replace(".lock", ""), 10);
+        const body = JSON.stringify({ type: "stop" });
+        const req = http.request({
+          hostname: "127.0.0.1", port, path: "/notify", method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-claude-code-ide-authorization": lock.authToken,
+            "Content-Length": Buffer.byteLength(body),
+          },
+        });
+        req.on("error", () => {});
+        req.end(body);
+      } catch (_e) {}
+    }
+  } catch (_e) {}
+  out();
+});
+function out() { process.stdout.write(JSON.stringify({ continue: true })); }
+`;
+
 export class ShellManager implements IShellManager {
   proc: ChildProcess | null = null;
   private stdoutDecoder = new StringDecoder("utf8");
   private stderrDecoder = new StringDecoder("utf8");
   private callbacks: ShellCallbacks | null = null;
+  private hookSettingsPath: string | null = null;
 
   constructor(
     private getBackend: () => Backend,
@@ -45,6 +123,12 @@ export class ShellManager implements IShellManager {
 
     // Persist last working directory for resume
     this.pluginData.lastCwd = cwd;
+
+    // Install Claude Code notification hooks
+    const hookSettingsPath = ShellManager.installHooks(cwd);
+    if (hookSettingsPath) {
+      this.hookSettingsPath = hookSettingsPath;
+    }
 
     const isWindows = process.platform === "win32";
     const shell = isWindows
@@ -169,6 +253,10 @@ export class ShellManager implements IShellManager {
   }
 
   stop(): void {
+    if (this.hookSettingsPath) {
+      ShellManager.uninstallHooks(this.hookSettingsPath);
+      this.hookSettingsPath = null;
+    }
     if (this.proc && !this.proc.killed) {
       this.proc.kill("SIGTERM");
       this.proc = null;
@@ -206,5 +294,71 @@ export class ShellManager implements IShellManager {
       return null;
     }
     return flags.trim();
+  }
+
+  /** Write Claude Code hook scripts + .claude/settings.local.json to the working directory. */
+  static installHooks(cwd: string): string | null {
+    try {
+      // Write hook scripts to temp dir
+      const notifyPath = path.join(os.tmpdir(), "claude_obsidian_notify.cjs");
+      const stopPath = path.join(os.tmpdir(), "claude_obsidian_stop.cjs");
+      fs.writeFileSync(notifyPath, NOTIFY_HOOK_SCRIPT, { mode: 0o755 });
+      fs.writeFileSync(stopPath, STOP_HOOK_SCRIPT, { mode: 0o755 });
+
+      // Write or merge .claude/settings.local.json in the working directory
+      const claudeDir = path.join(cwd, ".claude");
+      const settingsPath = path.join(claudeDir, "settings.local.json");
+
+      let settings: Record<string, unknown> = {};
+      try {
+        if (fs.existsSync(settingsPath)) {
+          settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+        }
+      } catch (_e) {}
+
+      // Build our hook entries
+      const obsidianHooks = {
+        Notification: [{
+          hooks: [{ type: "command", command: `node "${notifyPath}"`, timeout: 5000 }]
+        }],
+        Stop: [{
+          hooks: [{ type: "command", command: `node "${stopPath}"`, timeout: 5000 }]
+        }],
+      };
+
+      // Merge: preserve existing hooks, add ours
+      const existingHooks = (settings.hooks || {}) as Record<string, unknown[]>;
+      settings.hooks = { ...existingHooks, ...obsidianHooks };
+
+      fs.mkdirSync(claudeDir, { recursive: true });
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      return settingsPath;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  /** Remove Obsidian-managed hook entries from .claude/settings.local.json. */
+  static uninstallHooks(settingsPath: string): void {
+    try {
+      if (!fs.existsSync(settingsPath)) return;
+      const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+      const hooks = settings.hooks;
+      if (!hooks) return;
+      delete hooks.Notification;
+      delete hooks.Stop;
+      // If no hooks remain, remove the hooks key entirely
+      if (Object.keys(hooks).length === 0) {
+        delete settings.hooks;
+      }
+      // If settings is now empty, delete the file
+      if (Object.keys(settings).length === 0) {
+        fs.unlinkSync(settingsPath);
+        // Try to remove .claude dir if empty
+        try { fs.rmdirSync(path.dirname(settingsPath)); } catch (_e) {}
+      } else {
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      }
+    } catch (_e) {}
   }
 }

@@ -307,6 +307,17 @@ export default class VaultTerminalPlugin extends Plugin {
   startIdeServer(): void {
     const { IdeServer: IdeServerImpl } = require("./ide-server");
     this.ideServer = new IdeServerImpl(this.app, () => this.getVaultPath());
+    this.ideServer!.notifyCallback = (type: string, notificationType: string | null, _message: string | null) => {
+      if (type === "stop") {
+        new Notice("Claude finished", 4000);
+      } else if (type === "notification") {
+        if (notificationType === "permission_prompt") {
+          new Notice("Claude needs permission", 8000);
+        } else if (notificationType === "elicitation_dialog") {
+          new Notice("Claude is asking a question", 8000);
+        }
+      }
+    };
     this.ideServer!.start();
   }
 

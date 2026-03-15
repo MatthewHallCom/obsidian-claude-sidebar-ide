@@ -5,7 +5,7 @@ export interface PluginData {
   lastCwd?: string | null;
   runtimeMode?: 'local' | 'sprites';
   spritesApiToken?: string | null;
-
+  autoResume?: boolean;
 }
 
 export interface Backend {
