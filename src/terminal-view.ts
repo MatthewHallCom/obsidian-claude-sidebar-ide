@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { IShellManager } from "./shell-interface";
 import { CLI_BACKENDS } from "./backends";
+import { resolveBinaryToken } from "./binary-path";
 import type VaultTerminalPlugin from "./main";
 
 export const VIEW_TYPE = "vault-terminal";
@@ -847,8 +848,9 @@ export class TerminalView extends ItemView {
       setTimeout(() => {
         if (this.shell.isRunning) {
           const backend = this.getBackend();
-          let winCmd = backend.binary;
-          if (backend.binary === "claude") winCmd += " --ide";
+          const resolvedBinary = resolveBinaryToken(this.plugin.pluginData.binaryPaths?.[backend.id], backend.binary, true);
+          let winCmd = resolvedBinary;
+          if (backend.id === "claude") winCmd += " --ide";
           if (yoloMode && backend.yoloFlag) winCmd += " " + backend.yoloFlag;
           this.shell.write(winCmd + "\r");
         }

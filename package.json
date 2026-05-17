@@ -1,6 +1,6 @@
 {
   "name": "obsidian-claude-sidebar-ide",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "Run Claude Code in your sidebar.",
   "main": "main.js",
   "scripts": {

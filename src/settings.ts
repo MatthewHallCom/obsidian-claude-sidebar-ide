@@ -1,6 +1,8 @@
 import { App, PluginSettingTab, Setting, Platform, Notice } from "obsidian";
+import * as fs from "fs";
 import type { PluginData } from "./types";
 import { CLI_BACKENDS } from "./backends";
+import { expandHome } from "./binary-path";
 
 export interface SettingsHost {
   pluginData: PluginData;
@@ -100,6 +102,35 @@ export class ClaudeSidebarSettingsTab extends PluginSettingTab {
           await this.plugin.saveData(this.plugin.pluginData);
         });
       });
+
+    // Per-backend custom binary paths — local runtime mode only
+    if (mode === 'local') {
+      new Setting(containerEl).setName('Binary paths').setHeading();
+      for (const [key, backend] of Object.entries(CLI_BACKENDS)) {
+        new Setting(containerEl)
+          .setName(`${backend.label} binary path`)
+          .setDesc(`Custom path or command name for the ${backend.label} executable. `
+                 + `Leave empty to resolve "${backend.binary}" via PATH.`)
+          .addText(text => text
+            .setPlaceholder(backend.binary)
+            .setValue(this.plugin.pluginData.binaryPaths?.[key] || "")
+            .onChange(async (value) => {
+              const paths = { ...(this.plugin.pluginData.binaryPaths || {}) };
+              const v = value.trim();
+              if (v) paths[key] = v; else delete paths[key];
+              this.plugin.pluginData.binaryPaths =
+                Object.keys(paths).length ? paths : undefined;
+              await this.plugin.saveData(this.plugin.pluginData);
+              // Inline existence hint: only when the value looks like a path
+              // (contains a separator), not a bare PATH-resolved command name.
+              if (v && /[/\\]/.test(v)) {
+                if (!fs.existsSync(expandHome(v))) {
+                  new Notice("Binary not found at that path");
+                }
+              }
+            }));
+      }
+    }
 
     new Setting(containerEl)
       .setName("Default working directory")

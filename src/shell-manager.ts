@@ -5,6 +5,7 @@ import * as os from "os";
 import { StringDecoder } from "string_decoder";
 import type { Backend, PluginData } from "./types";
 import type { ShellOptions, ShellCallbacks, IShellManager } from "./shell-interface";
+import { resolveBinaryToken, posixQuote } from "./binary-path";
 
 export type { ShellOptions, ShellCallbacks };
 
@@ -195,8 +196,9 @@ export class ShellManager implements IShellManager {
 
     const backend = this.getBackend();
     const idePort = this.getIdeServerPort();
-    let cliCmd = backend.binary;
-    if (backend.binary === "claude" && idePort) cliCmd += " --ide";
+    const resolvedBinary = resolveBinaryToken(this.pluginData.binaryPaths?.[backend.id], backend.binary, isWindows);
+    let cliCmd = resolvedBinary;
+    if (backend.id === "claude" && idePort) cliCmd += " --ide";
     if (yoloMode && backend.yoloFlag) cliCmd += " " + backend.yoloFlag;
     const additionalFlags = ShellManager.sanitizeFlags(this.pluginData.additionalFlags);
     if (additionalFlags) cliCmd += " " + additionalFlags;
@@ -204,14 +206,14 @@ export class ShellManager implements IShellManager {
     if (continueSession && backend.resumeFlag) {
       if (backend.resumeIsSubcommand) {
         // e.g. "codex resume --last" — replace the whole command
-        cliCmd = backend.binary + " " + backend.resumeFlag;
+        cliCmd = resolvedBinary + " " + backend.resumeFlag;
         if (additionalFlags) cliCmd += " " + additionalFlags;
       } else {
         cliCmd += " " + backend.resumeFlag;
       }
     }
     // Pre-trust the working directory so Claude doesn't prompt on first run
-    const trustCmd = backend.binary === "claude" ? `claude config set -g trustedDirectories '${cwd}' 2>/dev/null; ` : "";
+    const trustCmd = backend.id === "claude" ? `${resolvedBinary} config set -g trustedDirectories ${posixQuote(cwd)} 2>/dev/null; ` : "";
     const shellCmd = continueSession
       ? `${trustCmd}${cliCmd} || ${baseCmd} || true; exec $SHELL -i`
       : `${trustCmd}${cliCmd} || true; exec $SHELL -i`;
@@ -234,7 +236,7 @@ export class ShellManager implements IShellManager {
     }
 
     // IDE integration: set env vars so Claude Code connects to our WebSocket server
-    if (backend.binary === "claude" && idePort) {
+    if (backend.id === "claude" && idePort) {
       shellEnv.CLAUDE_CODE_SSE_PORT = String(idePort);
       shellEnv.ENABLE_IDE_INTEGRATION = "true";
     }

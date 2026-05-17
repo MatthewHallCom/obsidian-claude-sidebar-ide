@@ -6,9 +6,11 @@ export interface PluginData {
   runtimeMode?: 'local' | 'sprites';
   spritesApiToken?: string | null;
   autoResume?: boolean;
+  binaryPaths?: Record<string, string>;
 }
 
 export interface Backend {
+  id: string;
   label: string;
   binary: string;
   pathHints: string[];

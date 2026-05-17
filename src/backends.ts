@@ -2,6 +2,7 @@ import type { Backend } from "./types";
 
 export const CLI_BACKENDS: Record<string, Backend> = {
   claude: {
+    id: "claude",
     label: "Claude Code",
     binary: "claude",
     pathHints: ["~/.local/bin"],
@@ -10,6 +11,7 @@ export const CLI_BACKENDS: Record<string, Backend> = {
     resumeIsSubcommand: false,
   },
   codex: {
+    id: "codex",
     label: "Codex",
     binary: "codex",
     pathHints: [],
@@ -18,6 +20,7 @@ export const CLI_BACKENDS: Record<string, Backend> = {
     resumeIsSubcommand: true,
   },
   opencode: {
+    id: "opencode",
     label: "OpenCode",
     binary: "opencode",
     pathHints: ["/opt/homebrew/bin"],
@@ -26,6 +29,7 @@ export const CLI_BACKENDS: Record<string, Backend> = {
     resumeIsSubcommand: false,
   },
   gemini: {
+    id: "gemini",
     label: "Gemini CLI",
     binary: "gemini",
     pathHints: [],

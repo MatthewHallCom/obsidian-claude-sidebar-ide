@@ -52,7 +52,7 @@ export class RemoteShellManager implements IShellManager {
 
     // Build CLI command
     let cliCmd = backend.binary;
-    if (backend.binary === 'claude') cliCmd += ' --ide';
+    if (backend.id === 'claude') cliCmd += ' --ide';
     if (opts.yoloMode && backend.yoloFlag) cliCmd += ' ' + backend.yoloFlag;
     const sanitizedFlags = RemoteShellManager.sanitizeFlags(this.pluginData.additionalFlags);
     if (sanitizedFlags) cliCmd += ' ' + sanitizedFlags;
